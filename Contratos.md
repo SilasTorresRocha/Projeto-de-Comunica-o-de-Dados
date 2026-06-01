@@ -28,6 +28,7 @@ Abaixo estão os protótipos de funções que **devem** ser implementados. Não 
 - **RX (`RX/src/auto_baud/AutoBaud.h`):**
   ```cpp
   // Bloqueia a execução até ler o padrão de calibração. Retorna o tempo de bit descoberto em microssegundos.
+  // Sugestão: Adicione um timeout máximo (ex: 5 segundos) e retorne 0 se falhar.
   unsigned long receberSincronismo(int pin_sensor);
   ```
 
@@ -36,6 +37,7 @@ Abaixo estão os protótipos de funções que **devem** ser implementados. Não 
 - **TX (`TX/src/crc/ModuloCRC.h`):**
   ```cpp
   // Calcula e retorna o valor de CRC sobre o buffer de dados.
+  // Recomendação: Use o CRC-16-IBM (0x8005, polinômio x^16 + x^15 + x^2 + 1), valor inicial 0xFFFF.
   uint16_t calcularCRC(const uint8_t* payload, uint8_t tam);
   ```
 - **RX (`RX/src/crc/ModuloCRC.h`):**
@@ -67,12 +69,13 @@ Abaixo estão os protótipos de funções que **devem** ser implementados. Não 
 **Exemplo para NRZ-L (Pessoa 1) em `src/nrz_l/NRZL.h`:**
 - **TX:** 
   ```cpp
+  // OBRIGATÓRIO: A função deve inserir fisicamente um byte de cabeçalho contendo o valor de 'tam' ANTES de transmitir os dados do array 'frame'.
   void enviarFrame_NRZL(const uint8_t* frame, uint8_t tam, int pin_led, unsigned long tempo_bit);
   ```
 - **RX:** 
   ```cpp
-  // Lê o 1º byte que dita o tamanho, depois faz um loop para ler esse N restante. Salva no frame_out e atualiza o tam_lido.
-  // OBRIGATÓRIO: Implementar um 'timeout' no ciclo interno (ex: retornar 'false' se decorrerem 50ms sem luz) para evitar loop infinito.
+  // Lê o 1º byte (tamanho N), aloca e lê o restante. Salva no frame_out e atualiza o tam_lido.
+  // OBRIGATÓRIO: O timeout de leitura deve ser DINÂMICO e proporcional. Ex: 10 * tempo_bit sem luz = aborta e retorna false.
   bool receberFrame_NRZL(uint8_t* frame_out, uint8_t* tam_lido, int pin_sensor, unsigned long tempo_bit);
   ```
 
@@ -89,7 +92,7 @@ msg.getBytes(payload, 64); // Extrai os bytes físicos com tipagem correta
 uint8_t tam_payload = msg.length();
 
 uint8_t buffer_crc[66]; // Payload + 2 bytes do CRC
-uint8_t buffer_luz[128]; // (Payload+CRC) + Bits de Paridade da Correção
+uint8_t buffer_luz[256]; // A correção de erro pode gerar muita redundância. Limite: 256 bytes.
 uint8_t tam_final = 0;
 
 // Pessoa 4 atua (Calcula CRC e anexa no final do payload puro)
@@ -110,14 +113,15 @@ enviarFrame_NRZL(buffer_luz, tam_final, PINO_LED, TEMPO_BIT);
 
 ### Receptor
 ```cpp
-uint8_t buffer_recebido[128];
+uint8_t buffer_recebido[256]; // Buffer grande para suportar a redundância da correção
 uint8_t tam_lido = 0;
 uint8_t tam_corrigido = 0;
 
 // Sincroniza e descobre a velocidade
 unsigned long tempo_bit = receberSincronismo(PINO_LDR);
+if (tempo_bit == 0) return; // Timeout de sincronismo. Cancela a leitura e tenta novamente depois.
 
-// Lê a luz com timeout de segurança
+// Lê a luz com timeout de segurança dinâmico
 if(receberFrame_NRZL(buffer_recebido, &tam_lido, PINO_LDR, tempo_bit)) {
     
     // Tenta corrigir a sujeira da luz
@@ -129,9 +133,14 @@ if(receberFrame_NRZL(buffer_recebido, &tam_lido, PINO_LDR, tempo_bit)) {
         uint16_t crc_recebido = (buffer_recebido[tam_payload] << 8) | buffer_recebido[tam_payload + 1];
         
         if(verificarCRC(buffer_recebido, tam_payload, crc_recebido)) {
-            // SUCESSO ABSOLUTO! Repassa os dados puros para a Serial
+            //Repassa os dados puros para a Serial
         }
     }
 }
 ```
 Dessa forma o trabalho de todos se conecta de forma fluida.
+
+## 5. Dicas Extras para Integração (Arduino)
+*   **Pinos no `.ino`:** Use `#define PINO_LED` e `#define PINO_LDR` no início do arquivo para que fique padronizado.
+*   **Temporização Precisa:** Nas funções de codificação de linha, para garantir o tempo de bit exigido no contrato, recomendo o uso da função `delayMicroseconds()` em conjunto com `digitalWrite()` e `digitalRead()`. 
+*   **Tempos curtos:** Tratem adequadamente o `tempo_bit` caso ele seja muito curto (tipo: < 20 µs) para não engasgar a leitura no microcontrolador.
