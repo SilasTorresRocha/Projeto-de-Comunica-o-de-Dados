@@ -1,4 +1,4 @@
-# Projeto de Comunicação de Dados - UTFPR
+# Projeto de Comunicação de Dados
 
 Projeto para realizar a comunicação entre dois dispositivos Arduino (Emissor e Receptor) por meio de sinais luminosos, como requisito da disciplina de Comunicação de Dados.
 
@@ -52,4 +52,3 @@ Como parte dos requisitos, e preciso entregar um **Relatório Completo**. Para f
 4. **Pontos positivos e negativos:** Avaliação crítica da sua própria implementação.
 5. **Casos de Teste (MUITO IMPORTANTE):** Inserir figuras (prints) mostrando as execuções isoladas do seu módulo, testes de mesa, ou links de vídeos provando que o seu código funciona.
 
-Por favor, caprichem na documentação dos arquivos e no relatório.
