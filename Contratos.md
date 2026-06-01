@@ -9,9 +9,10 @@ O projeto é dividido em módulos. Cada módulo tem sua própria pasta dentro de
 ## 2. Formato do Frame de Dados
 Para enviar os dados (máx 64 caracteres), passaremos por um "túnel" de funções. O array de dados vai aumentando conforme as redundâncias são inseridas.
 Ordem de empacotamento no TX:
-1. `CorrecaoErro_encode` adiciona os bits/bytes de correção no payload.
-2. `CRC_calcula` gera o checksum que é anexado ao final.
-3. O frame completo é enviado usando o `Codificacao_enviar_XXX()`, precedido pelo `Sincronismo_enviar()`.
+1. `CRC_calcula` gera o checksum (geralmente 2 bytes) e o anexa ao final do payload puro.
+2. `CorrecaoErro_encode` processa o bloco todo (Payload + CRC) e adiciona os bits/bytes de correção de erro. Dessa forma, o próprio CRC viaja protegido contra ruídos na luz.
+3. A comunicação inicia chamando o `Sincronismo_enviar()`.
+4. A função de codificação física (`enviarFrame_NRZL()`) envia o frame completo. O primeiro byte emitido DEVE ser o tamanho do frame, para que o RX não fique travado num loop infinito lendo ruído.
 
 ## 3. Contratos de Funções por Módulo
 
@@ -70,30 +71,63 @@ Abaixo estão os protótipos de funções que **devem** ser implementados. Não 
   ```
 - **RX:** 
   ```cpp
-  bool receberFrame_NRZL(uint8_t* frame_out, uint8_t tamanho_esperado, int pin_sensor, unsigned long tempo_bit);
+  // Lê o 1º byte que dita o tamanho, depois faz um loop para ler esse N restante. Salva no frame_out e atualiza o tam_lido.
+  bool receberFrame_NRZL(uint8_t* frame_out, uint8_t* tam_lido, int pin_sensor, unsigned long tempo_bit);
   ```
 
 *A mesma estrutura de funções deve ser reproduzida para `NRZI`, `Manchester` e `ManchesterDiferencial`.*
 
 ## 4. Integração no `.ino` Principal
-Nós não vamos programar lógicas complexas no `.ino`. O `.ino` do TX será basicamente:
+Não tera lógicas complexas no `.ino`. O `.ino` será basicamente para orquestrar as chamadas.
+
+### Transmissor
 ```cpp
-// Pseudocódigo TX.ino
-String msg = "Ola Marte"; //Ola Mundo diferente (Marte estaria incluso em Mundo ?)
-uint8_t buffer_protegido[128];
-uint8_t tamanho_protegido = 0;
+uint8_t payload[64] = "Ola Marte"; //Ola Mundo diferente (Marte estaria incluso em Mundo ?)
+uint8_t tam_payload = 9;
 
-// Correção de Erro (Adiciona redundância)
-codificarCorrecao((uint8_t*)msg.c_str(), msg.length(), buffer_protegido, &tamanho_protegido);
+uint8_t buffer_crc[66]; // Payload + 2 bytes do CRC
+uint8_t buffer_luz[128]; // (Payload+CRC) + Bits de Paridade da Correção
+uint8_t tam_final = 0;
 
-// CRC (Calcula Checksum)
-uint16_t crc = calcularCRC(buffer_protegido, tamanho_protegido);
-// (anexa o crc ao final do buffer_protegido)
+// Pessoa 4 atua (Calcula CRC e anexa no final do payload puro)
+uint16_t crc = calcularCRC(payload, tam_payload);
+memcpy(buffer_crc, payload, tam_payload);
+buffer_crc[tam_payload] = (crc >> 8) & 0xFF; // Byte alto
+buffer_crc[tam_payload + 1] = crc & 0xFF;    // Byte baixo
 
-// Sincronismo Inicial
-enviarSincronismo(pin_led, TEMPO_BIT);
+// Pessoa 3 atua (Aplica Correção de Erros em TUDO, inclusive no CRC)
+codificarCorrecao(buffer_crc, tam_payload + 2, buffer_luz, &tam_final);
 
-// Codificação e Transmissão Física 
-enviarFrame_NRZL(buffer_protegido, tamanho_protegido + 2, pin_led, TEMPO_BIT);
+// Pessoa 2 atua (Calibra a linha)
+enviarSincronismo(PINO_LED, TEMPO_BIT);
+
+// O primeiro byte enviado DEVE ser o 'tam_final' para o RX não travar
+enviarFrame_NRZL(buffer_luz, tam_final, PINO_LED, TEMPO_BIT);
+```
+
+### Receptor
+```cpp
+uint8_t buffer_recebido[128];
+uint8_t tam_lido = 0;
+uint8_t tam_corrigido = 0;
+
+// Sincroniza e descobre a velocidade
+unsigned long tempo_bit = receberSincronismo(PINO_LDR);
+
+// Lê a luz. A função 'receberFrame' primeiro lê 1 byte (o tamanho), e depois lê o resto baseado nesse byte.
+receberFrame_NRZL(buffer_recebido, &tam_lido, PINO_LDR, tempo_bit);
+
+// Tenta corrigir a sujeira da luz
+int erros = decodificarCorrecao(buffer_recebido, tam_lido, &tam_corrigido);
+
+// Se a correção não estourou o limite (não retornou -1), valida o CRC
+if(erros != -1) {
+    uint8_t tam_payload = tam_corrigido - 2; // Tira os 2 bytes do CRC
+    uint16_t crc_recebido = (buffer_recebido[tam_payload] << 8) | buffer_recebido[tam_payload + 1];
+    
+    if(verificarCRC(buffer_recebido, tam_payload, crc_recebido)) {
+        // Repassa os dados puros para a Serial
+    }
+}
 ```
 Dessa forma o trabalho de todos se conecta de forma fluida.
