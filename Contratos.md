@@ -144,7 +144,7 @@ if(receberFrame_NRZL(buffer_recebido, &tam_lido, PINO_LDR, tempo_bit)) {
 Dessa forma o trabalho de todos se conecta de forma fluida.
 
 ## 5. Dicas Extras para Integração (Arduino)
-*   **Pinos no `.ino`:** Use `#define PINO_LED` e `#define PINO_LDR` no início do arquivo para que fique padronizado.
+*   **Pinos para Testes Isolados:** Se vocês forem criar arquivos `.ino` próprios para testarem seus códigos isoladamente, recomendo usarem `#define PINO_LED` e `#define PINO_LDR` para mantermos um padrão. No `.ino` oficial (que farei), os pinos serão definidos.
 *   **Velocidade de Transmissão:** Defina uma constante no `.ino` do transmissor. tipo: `#define TEMPO_BIT 1000` (microssegundos). O valor típico é 1000 µs = 1000 bps (1 kbps).
 *   **Temporização Não-Bloqueante (PROIBIDO USAR DELAY):** Nas funções de codificação de linha, é estritamente proibido usar `delay()` ou `delayMicroseconds()`. Como o LDR é sensível, o ciclo de leitura precisa de rodar livremente. O controlo de tempo do bit deve ser feito monitorizando continuamente a função `micros()`. Exemplo de espera correta: 
     `unsigned long inicio = micros();`
