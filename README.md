@@ -43,7 +43,7 @@ Dentro da sua pasta correspondente em `TX` ou `RX`, já deixei criados os templa
 
 ## Relatórios e Documentação (LaTeX)
 
-Como parte dos requisitos, e preciso entregar um **Relatório Completo**. Para facilitar a compilação, cada integrante deverá escrever sua parte do relatório no arquivo `.tex` que deixei na sua pasta. Eu, como gerente, usarei a tag `\input{sua_pasta/relatorio.tex}` para unificar tudo no documento final do grupo.
+Como parte dos requisitos, e preciso entregar um **Relatório Completo**. Para facilitar a compilação, cada integrante deverá escrever sua parte do relatório no arquivo `.tex` que deixei na sua pasta. Usarei a tag `\input{sua_pasta/relatorio.tex}` para unificar tudo no documento final do grupo.
 
 **O seu mini-relatório (.tex) DEVE conter:**
 1. **Modelagem realizada:** Explicação da teoria por trás do seu algoritmo (Tipo: como o polinômio do CRC foi escolhido, como a matemática da correção de erro foi aplicada).
